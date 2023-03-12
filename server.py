@@ -2,6 +2,7 @@ import socket
 import threading
 import pygame
 import math
+import json
 
 
 class Bot:
@@ -11,7 +12,7 @@ class Bot:
         self.color = (255, 255, 255)
         self.height = 10
         self.width = 10
-        self.speed = 0.1
+        self.speed = 0.05
         self.x = self.screen.get_width() // 2
         self.y = self.screen.get_height() // 2
 
@@ -51,9 +52,10 @@ class Bot:
             self.rot_speed = 0
 
     def handle_rotation(self):
+        self.screen.fill((0, 0, 0), self.rect)
         # defining angle of the rotation
         self.angle = (self.angle + self.rot_speed) % 360
-        print(self.angle)
+        # print(self.angle)
         # rotating the orignal image
         self.block_copy = pygame.transform.rotate(self.block, self.angle)
         self.rect = self.block_copy.get_rect(center=(self.x, self.y))
@@ -62,6 +64,32 @@ class Bot:
         # flipping the display after drawing everything
         self.rot_speed = 0
 
+    def handle_proximity(self, prox_data):
+        # Create 2x2 red squares for each proximity direction
+        for direction, distance in prox_data.items():
+            if direction == 'up':
+                x = self.x + distance*math.sin((360-self.angle)*(math.pi/180))
+                y = self.y - distance*math.cos((360-self.angle)*(math.pi/180))
+            elif direction == 'down':
+                x = self.x - distance*math.sin((360-self.angle)*(math.pi/180))
+                y = self.y + distance*math.cos((360-self.angle)*(math.pi/180))
+            elif direction == 'left':
+                x = self.x + distance * \
+                    math.sin((360-(self.angle+90))*(math.pi/180))
+                y = self.y - distance * \
+                    math.cos((360-(self.angle+90))*(math.pi/180))
+            elif direction == 'right':
+                x = self.x - distance * \
+                    math.sin((360-(self.angle+90))*(math.pi/180))
+                y = self.y + distance * \
+                    math.cos((360-(self.angle+90))*(math.pi/180))
+
+            square_rect = pygame.Rect(x-1, y-1, 2, 2)
+            pygame.draw.rect(self.screen, (255, 0, 0), square_rect)
+
+    def test(self):
+        print('this is from a thread')
+
 
 # Initialize Pygame
 pygame.init()
@@ -69,8 +97,8 @@ pygame.init()
 # Set the window size and title
 size = (800, 600)
 pygame.fastevent.init()
-screen = pygame.display.set_mode((640, 480))
-pygame.display.set_caption("Socket Thread")
+screen = pygame.display.set_mode(size)
+pygame.display.set_caption("room map")
 
 # Set the server address and port
 HOST = '127.0.0.1'
@@ -84,7 +112,7 @@ sock.listen(5)
 print(f"Listening on {HOST}:{PORT}...")
 
 
-def handle_connection(conn):
+def handle_connection(conn, bot):
     while True:
         # Receive data from the client
         data = conn.recv(1024)
@@ -92,7 +120,14 @@ def handle_connection(conn):
             break
 
         # Print the received data
-        print(f"Received data: {data.decode('utf-8')}")
+        # print(f"Received data: {data.decode('utf-8')}")
+        try:
+            j = json.loads(data.decode('utf-8'))
+        except e:
+            pass
+
+        print(j)
+        bot.handle_proximity(j)
 
     # Close the connection
     conn.close()
@@ -106,12 +141,12 @@ while True:
     bot = Bot(screen, conn)
 
     # Create a new thread to handle the connection
-    thread = threading.Thread(target=handle_connection, args=(conn,))
+    thread = threading.Thread(target=handle_connection, args=(conn, bot,))
     thread.start()
 
     # Listen for an up arrow key press
     while True:
-        screen.fill((0, 0, 0))
+        # screen.fill((0, 0, 0))
 
         e = pygame.fastevent.poll()
         keys = pygame.key.get_pressed()
